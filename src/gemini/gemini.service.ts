@@ -1,15 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
+  private readonly logger = new Logger(GeminiService.name);
 
   constructor() {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
 
   async processImage(
+    measure_type: string,
+    customer_code: string,
     base64Image: string,
     mimeType: string = 'image/jpeg',
   ): Promise<{
@@ -18,11 +22,39 @@ export class GeminiService {
     measure_uuid: string;
   }> {
     try {
+      this.logger.log('erro');
+      if (!['image/jpeg', 'image/png'].includes(mimeType)) {
+        throw new BadRequestException(
+          'Invalid image format. Only JPEG and PNG are supported',
+        );
+      }
       const model = this.genAI.getGenerativeModel({
-        model: 'gemini-1.5-pro',
+        model: 'gemini-1.5-flash',
       });
-      const prompt =
-        'What is the meter reading in this image? Please respond with only the numeric value, include the unique UUID if available, and return the processed image URL if any.';
+      const prompt = `I am an assistant that analyzes images and extracts relevant information.
+
+      Here is the image provided in base64:
+      \`\`\`base64
+      ${base64Image}
+      \`\`\`
+
+      The additional information is:
+      - Customer code: ${customer_code}
+      - Measure type: ${measure_type}
+
+      Analyze the image and respond with the following information:
+
+      - Meter reading
+      - Measurement UUID
+      - Processed image URL
+
+      Response format: Meter:<meter reading value>|UUID:<UUID>|URL:<URL>
+
+      Remember:
+      - Use only numbers for the meter reading.
+      - If the UUID is not available, leave the field blank.
+      - If the processed image URL is not available, leave the field blank.
+    `;
 
       const result = await model.generateContent([
         prompt,
@@ -30,35 +62,24 @@ export class GeminiService {
       ]);
 
       const response = await result.response;
-      const text = await response.text();
+      const textGemini = await response.text().trim();
 
-      const measure_value = parseFloat(text.replace(/[^0-9.]/g, ''));
-      const measure_uuid = this.extractUUID(text);
-      const image_url = this.extractImageUrl(text);
+      const [measure_value, measure_uuid, image_url] = textGemini
+        .split('|')
+        .map((result: string) =>
+          result.split(':')[1] ? result.split(':')[1] : undefined,
+        );
 
-      if (isNaN(measure_value) || !measure_uuid || !image_url) {
+      if (!measure_value || !measure_uuid || !image_url) {
         throw new Error(
-          `Failed to extract required values from Gemini response: ${text}`,
+          `Failed to extract required values from Gemini response: ${textGemini}`,
         );
       }
 
-      return { image_url, measure_value, measure_uuid };
+      return { image_url, measure_value: Number(measure_value), measure_uuid };
     } catch (error) {
       console.log(error.message);
       throw new BadRequestException(error);
     }
-  }
-
-  private extractUUID(text: string): string {
-    const uuidRegex =
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-    const match = text.match(uuidRegex);
-    return match ? match[0] : null;
-  }
-
-  private extractImageUrl(text: string): string {
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const match = text.match(urlRegex);
-    return match ? match[0] : null;
   }
 }

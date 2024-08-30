@@ -33,7 +33,12 @@ export class ReadImgService {
     try {
       const [, typeBase64, code] = data.image.match(/^data:(.+?);base64,(.+)$/);
       const { image_url, measure_value, measure_uuid } =
-        await this.geminiService.processImage(code, typeBase64);
+        await this.geminiService.processImage(
+          data.measure_type,
+          data.customer_code,
+          code,
+          typeBase64,
+        );
 
       return await this.prisma.readImg.create({
         data: {

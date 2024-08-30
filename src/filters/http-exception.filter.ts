@@ -27,6 +27,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = exceptionResponse as string;
       }
     }
+    if (status === HttpStatus.CONFLICT) {
+      errorCode = 'DOUBLE_REPORT';
+    }
 
     response.status(status).json({
       error_code: errorCode,
