@@ -1,0 +1,22 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ReadImg {
+  id             Int        @id @default(autoincrement()) @db.UnsignedInt
+  image          String     @db.VarChar(255)
+  image_url      String?    @db.VarChar(255)
+  customer_code  String     @db.VarChar(255)
+  measure_datetime DateTime @default(now()) @db.Timestamp(0)
+  measure_type   String     @db.VarChar(10)
+  measure_value  Int        @db.TinyInt
+  measure_uuid   String     @db.VarChar(255)
+  has_confirmed  Boolean    @default(false)
+  createdAt      DateTime   @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime   @default(now()) @db.Timestamp(0)    
+}
